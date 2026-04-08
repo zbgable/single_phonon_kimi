@@ -1,0 +1,474 @@
+\documentclass[12pt,a4paper]{article}
+
+% 中文支持
+\usepackage{ctex}
+
+% 数学包
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{physics}
+\usepackage{braket}
+
+% 图表
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+
+% 页面设置
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% 代码高亮
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true
+}
+
+% 超链接
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+% 定理环境
+\theoremstyle{definition}
+\newtheorem{definition}{定义}[section]
+\newtheorem{theorem}{定理}[section]
+
+\title{\textbf{Transmon Qubit 行波声子发射}\\[0.5em]
+\large 基于 Lindblad 主方程的量子动力学仿真}
+\author{基于 QuTiP 的数值模拟}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文档详细推导了超导 Transmon qubit 通过 IDT（叉指换能器）向行波声子波导发射声子的量子动力学模型。与传统腔量子电动力学不同，本模型\textbf{不使用 Jaynes-Cummings 哈密顿量}，也\textbf{不引入声子谐振子算符}，而是将行波声子环境视为连续谱（continuum），在 Born-Markov 近似下用 Lindblad 耗散项直接描述声子发射过程。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%=============================================================================
+\section{引言}
+%=============================================================================
+
+超导量子比特与声子系统的耦合为实现固态量子声学接口提供了可能。当 qubit 通过 IDT 耦合到一维声子波导时，可以产生定向传播的行波声子，这对量子信息传输具有重要意义。
+
+\subsection{模型特点}
+
+本模型的核心特点：
+\begin{itemize}
+    \item \textbf{无 JC 模型}：不使用 Jaynes-Cummings 哈密顿量
+    \item \textbf{无声子算符}：不显式引入声子产生/湮灭算符
+    \item \textbf{Lindblad 描述}：用耗散直接刻画行波声子发射
+    \item \textbf{三种耗散区分}：qubit 固有弛豫 $\gamma_1$、纯退相 $\gamma_\phi$、声子发射 $\kappa_{\text{ph}}$
+\end{itemize}
+
+%=============================================================================
+\section{Transmon Qubit 哈密顿量}
+%=============================================================================
+
+\subsection{非谐振子模型}
+
+Transmon qubit 由非线性约瑟夫森结构成，其能级结构为
+\begin{equation}
+    E_n = \hbar\omega_q n - \frac{\hbar\alpha}{2}n(n-1)
+    \label{eq:transmon_energy}
+\end{equation}
+其中：
+\begin{itemize}
+    \item $\omega_q$：qubit 跃迁频率（基态 $|g\rangle$ 到第一激发态 $|e\rangle$）
+    \item $\alpha > 0$：非谐性（anharmonicity），确保 $|e\rangle \to |f\rangle$ 跃迁频率低于 $|g\rangle \to |e\rangle$
+\end{itemize}
+
+\subsection{哈密顿量算符形式}
+
+在能量本征基下，哈密顿量可写为
+\begin{equation}
+    \hat{H}_{\text{qubit}} = \hbar\omega_q \hat{n} - \frac{\hbar\alpha}{2}\hat{n}(\hat{n}-1)
+    \label{eq:transmon_hamiltonian}
+\end{equation}
+其中粒子数算符
+\begin{equation}
+    \hat{n} = \hat{\sigma}_+\hat{\sigma}_- = \sum_{n=1}^{\infty} n|n\rangle\langle n|
+\end{equation}
+升降算符定义为
+\begin{equation}
+    \hat{\sigma}_+ = \sum_{n=0}^{\infty} \sqrt{n+1}|n+1\rangle\langle n|, \quad
+    \hat{\sigma}_- = \sum_{n=0}^{\infty} \sqrt{n+1}|n\rangle\langle n+1|
+\end{equation}
+
+\subsection{旋转框架}
+
+在微波驱动下，引入旋波变换（rotating frame）以消除快速振荡。设驱动频率为 $\omega_d$，定义幺正变换
+\begin{equation}
+    \hat{U}(t) = e^{i\omega_d \hat{n} t}
+\end{equation}
+
+变换后的哈密顿量为
+\begin{equation}
+    \hat{H}_{\text{rot}} = \hat{U}\hat{H}\hat{U}^\dagger + i\hbar\dot{\hat{U}}\hat{U}^\dagger
+\end{equation}
+
+当 $\omega_d = \omega_q$（共振驱动）时：
+\begin{align}
+    \hat{H}_{\text{rot}} &= \hbar(\omega_q - \omega_d)\hat{n} - \frac{\hbar\alpha}{2}\hat{n}(\hat{n}-1) \nonumber\\
+    &= -\frac{\hbar\alpha}{2}\hat{n}(\hat{n}-1)
+    \label{eq:rotating_frame_hamiltonian}
+\end{align}
+
+在自然单位制 $\hbar = 1$ 下：
+\begin{equation}
+    \boxed{\hat{H}_0 = -\frac{\alpha}{2}\hat{n}(\hat{n}-1)}
+\end{equation}
+
+%=============================================================================
+\section{行波声子发射的 Lindblad 描述}
+%=============================================================================
+
+\subsection{Born-Markov 近似下的环境}
+
+传统腔 QED 使用 Jaynes-Cummings 模型描述 qubit 与离散谐振腔模式的耦合：
+\begin{equation}
+    \hat{H}_{\text{JC}} = \hbar g(\hat{a}^\dagger\hat{\sigma}_- + \hat{a}\hat{\sigma}_+)
+\end{equation}
+
+然而，对于行波声子波导（1D continuum），环境具有连续谱。在 Born-Markov 近似下：
+\begin{enumerate}
+    \item \textbf{Born 近似}：系统-环境耦合弱，环境状态几乎不受扰动
+    \item \textbf{Markov 近似}：环境关联时间远小于系统动力学时间尺度
+\end{enumerate}
+
+此时，环境的作用等效为对系统的\textbf{耗散}，可用 Lindblad 算符描述。
+
+\subsection{Lindblad 主方程}
+
+开放量子系统的密度矩阵演化遵循 Lindblad 主方程：
+\begin{equation}
+    \frac{d\hat{\rho}}{dt} = -\frac{i}{\hbar}[\hat{H}, \hat{\rho}] + \mathcal{L}[\hat{\rho}]
+    \label{eq:lindblad_master}
+\end{equation}
+
+其中耗散超算符
+\begin{equation}
+    \mathcal{L}[\hat{\rho}] = \sum_k \gamma_k \left(\hat{L}_k\hat{\rho}\hat{L}_k^\dagger - \frac{1}{2}\{\hat{L}_k^\dagger\hat{L}_k, \hat{\rho}\}\right)
+    \label{eq:dissipator}
+\end{equation}
+$\hat{L}_k$ 为 Lindblad 算符，$\gamma_k$ 为对应的耗散率。
+
+\subsection{三种耗散机制}
+
+\subsubsection{1. Qubit 固有弛豫 ($\gamma_1$)}
+
+描述 qubit 向非声子环境（如介质损耗、准粒子激发）的能量弛豫：
+\begin{equation}
+    \mathcal{L}_{\gamma_1}[\hat{\rho}] = \gamma_1\left(\hat{\sigma}_-\hat{\rho}\hat{\sigma}_+ - \frac{1}{2}\{\hat{\sigma}_+\hat{\sigma}_-, \hat{\rho}\}\right)
+    \label{eq:t1_dissipation}
+\end{equation}
+对应的特征时间为 $T_1 = 1/\gamma_1$。
+
+\subsubsection{2. 纯退相 ($\gamma_\phi$)}
+
+描述无能量交换的相位信息丢失（如电荷噪声、磁通噪声）：
+\begin{equation}
+    \mathcal{L}_{\gamma_\phi}[\hat{\rho}] = \frac{\gamma_\phi}{2}\left(\hat{\sigma}_z\hat{\rho}\hat{\sigma}_z - \hat{\rho}\right)
+    \label{eq:pure_dephasing}
+\end{equation}
+注意：此形式产生的退相干率为 $\gamma_\phi$。
+
+总的退相时间满足
+\begin{equation}
+    \frac{1}{T_2} = \frac{1}{2T_1} + \gamma_\phi
+    \label{eq:t2_relation}
+\end{equation}
+
+\subsubsection{3. 声子发射 ($\kappa_{\text{ph}}$) —— 核心创新}
+
+这是\textbf{向行波声子波导的有用发射}。物理图像：
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+qubit 激发 $\xrightarrow{\text{IDT}}$ 行波声子\\[0.5em]
+$|e, 0\rangle \to |g, 1_k\rangle$（声子具有确定动量 $k$）
+}}
+\end{center}
+
+在 Born-Markov 近似下，这等效为 qubit 的一个额外耗散通道：
+\begin{equation}
+    \boxed{\mathcal{L}_{\kappa_{\text{ph}}}[\hat{\rho}] = \kappa_{\text{ph}}\left(\hat{\sigma}_-\hat{\rho}\hat{\sigma}_+ - \frac{1}{2}\{\hat{\sigma}_+\hat{\sigma}_-, \hat{\rho}\}\right)}
+    \label{eq:phonon_emission}
+\end{equation}
+
+\textbf{关键理解}：
+\begin{itemize}
+    \item 与自发辐射到自由空间的原子类似，无需光子/声子算符
+    \item 发射的声子一旦进入波导即传播离开，不可逆（行波特性）
+    \item $\kappa_{\text{ph}}$ 由 IDT 耦合强度决定
+\end{itemize}
+
+\subsection{总耗散}
+
+\begin{equation}
+    \mathcal{L}[\hat{\rho}] = \mathcal{L}_{\gamma_1}[\hat{\rho}] + \mathcal{L}_{\gamma_\phi}[\hat{\rho}] + \mathcal{L}_{\kappa_{\text{ph}}}[\hat{\rho}]
+    \label{eq:total_dissipation}
+\end{equation}
+
+%=============================================================================
+\section{微波驱动与高斯脉冲}
+%=============================================================================
+
+\subsection{半经典驱动}
+
+微波驱动在半经典近似下表示为时变势：
+\begin{equation}
+    \hat{H}_{\text{drive}}(t) = \hbar\Omega(t)\cos(\omega_d t)\hat{\sigma}_x
+    \label{eq:drive_hamiltonian_lab}
+\end{equation}
+其中 $\hat{\sigma}_x = \hat{\sigma}_+ + \hat{\sigma}_-$。
+
+\subsection{旋转波近似 (RWA)}
+
+在旋转框架中，快速振荡项 $e^{\pm 2i\omega_d t}$ 被忽略（RWA）：
+\begin{equation}
+    \hat{H}_{\text{drive}}^{\text{(rot)}} = \frac{\hbar\Omega(t)}{2}\hat{\sigma}_x
+    \label{eq:drive_rwa}
+\end{equation}
+
+\subsection{高斯脉冲}
+
+\begin{definition}[高斯脉冲]
+时变驱动幅度为
+\begin{equation}
+    \boxed{\Omega(t) = \Omega_0 \exp\left(-\frac{(t-t_0)^2}{2\sigma^2}\right)}
+    \label{eq:gaussian_pulse}
+\end{equation}
+其中：
+\begin{itemize}
+    \item $\Omega_0$：峰值拉比频率
+    \item $t_0$：脉冲中心时间
+    \item $\sigma$：脉冲宽度（标准差）
+\end{itemize}
+\end{definition}
+
+\subsection{Sech（双曲正割）脉冲}
+
+除高斯脉冲外，sech 脉冲在量子声学中也有重要应用。
+
+\begin{definition}[Sech 脉冲]
+时变驱动幅度为
+\begin{equation}
+    \boxed{\Omega(t) = \Omega_0 \sech\left(\frac{t-t_0}{\sigma}\right) = \frac{\Omega_0}{\cosh\left(\frac{t-t_0}{\sigma}\right)}}
+    \label{eq:sech_pulse}
+\end{equation}
+\end{definition}
+
+\textbf{Sech 脉冲的物理特性}：
+
+\begin{enumerate}
+    \item \textbf{时域特性}：
+    \begin{itemize}
+        \item 峰值在 $t = t_0$ 处，$\Omega(t_0) = \Omega_0$
+        \item 尾部衰减比高斯慢：$\sech(x) \sim 2e^{-|x|}$（当 $|x| \gg 1$）
+        \item 脉冲面积（积分）：$\int_{-\infty}^{\infty} \sech(t/\sigma) dt = \pi\sigma$
+    \end{itemize}
+    
+    \item \textbf{频域特性}：
+    \begin{itemize}
+        \item Fourier 变换为 Lorentzian 线型
+        \item 频谱宽度 $\Delta\omega \approx \frac{2}{\pi\sigma}$（半高全宽）
+        \item 比高斯有更宽的低频分量
+    \end{itemize}
+    
+    \item \textbf{应用场景}：
+    \begin{itemize}
+        \item 孤子（soliton）传输中的形状保持
+        \item 与某些声子波导色散特性的匹配
+        \item 自感应透明（self-induced transparency）效应
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Time-bin 编码}
+
+两个分离的高斯脉冲：
+\begin{equation}
+    \Omega_{\text{double}}(t) = \Omega_0\left[\exp\left(-\frac{(t-t_1)^2}{2\sigma^2}\right) + \exp\left(-\frac{(t-t_2)^2}{2\sigma^2}\right)\right]
+    \label{eq:double_pulse}
+\end{equation}
+
+条件 $\Delta t = |t_2 - t_1| \gg \sigma$ 确保两个声子包在时序上可区分，形成 Time-bin 编码。
+
+对于 sech 脉冲，双脉冲形式为：
+\begin{equation}
+    \Omega_{\text{sech}}(t) = \Omega_0\left[\sech\left(\frac{t-t_1}{\sigma}\right) + \sech\left(\frac{t-t_2}{\sigma}\right)\right]
+    \label{eq:double_sech_pulse}
+\end{equation}
+
+%=============================================================================
+\section{可观测量与物理量}
+%=============================================================================
+
+\subsection{Qubit 激发态布居}
+
+\begin{equation}
+    P_e(t) = \langle\hat{n}\rangle(t) = \text{Tr}[\hat{n}\hat{\rho}(t)]
+    \label{eq:excited_population}
+\end{equation}
+
+\subsection{声子发射率}
+
+由 Lindblad 项的迹运算：
+\begin{align}
+    \Gamma_{\text{ph}}(t) &= \text{Tr}[\hat{n}\mathcal{L}_{\kappa_{\text{ph}}}[\hat{\rho}]] \nonumber\\
+    &= \kappa_{\text{ph}}\text{Tr}[\hat{n}\hat{\sigma}_-\hat{\rho}\hat{\sigma}_+] \nonumber\\
+    &= \kappa_{\text{ph}}\langle\hat{\sigma}_+\hat{\sigma}_-\rangle \nonumber\\
+    &= \kappa_{\text{ph}} P_e(t)
+    \label{eq:phonon_emission_rate}
+\end{align}
+
+\begin{theorem}[瞬时声子发射率]
+\begin{equation}
+    \boxed{\Gamma_{\text{ph}}(t) = \kappa_{\text{ph}} P_e(t)}
+\end{equation}
+发射率正比于 qubit 激发态布居。
+\end{theorem}
+
+\subsection{累计发射声子数}
+
+\begin{equation}
+    N_{\text{ph}}(t) = \int_0^t \Gamma_{\text{ph}}(\tau) d\tau = \kappa_{\text{ph}}\int_0^t P_e(\tau) d\tau
+    \label{eq:cumulative_phonons}
+\end{equation}
+
+\subsection{量子效率}
+
+定义声子发射的量子效率为发射声子数与理论最大值的比值：
+\begin{equation}
+    \boxed{\eta(t) = \frac{N_{\text{ph}}(t)}{P_e^{\text{max}}}}
+    \label{eq:quantum_efficiency}
+\end{equation}
+其中 $P_e^{\text{max}} = \max_t P_e(t)$ 是最大激发态布居。
+
+稳态效率（$t \to \infty$）：
+\begin{equation}
+    \eta_{\infty} = \frac{\kappa_{\text{ph}}}{\gamma_1 + \kappa_{\text{ph}}}
+    \label{eq:steady_efficiency}
+\end{equation}
+这表示 qubit 衰减能量转化为声子的比例。
+
+%=============================================================================
+\section{数值实现}
+%=============================================================================
+
+\subsection{QuTiP 求解}
+
+使用 QuTiP 的 \texttt{mesolve} 求解 Lindblad 主方程：
+
+\begin{lstlisting}
+# 哈密顿量 [H0, [Hx, coefficient_function]]
+H = [H0, [sigma_x, lambda t, args: 0.5 * Omega(t)]]
+
+# Lindblad 算符列表
+c_ops = [sqrt(gamma1) * sigma_minus,    # T1 弛豫
+         sqrt(gamma_phi/2) * sigma_z,   # 纯退相
+         sqrt(kappa_ph) * sigma_minus]  # 声子发射
+
+# 求解
+result = mesolve(H, rho0, t_list, c_ops, e_ops)
+\end{lstlisting}
+
+\subsection{参数表}
+
+\begin{table}[h]
+\centering
+\caption{仿真参数（自然单位 $\hbar=1$）}
+\begin{tabular}{ccc}
+\toprule
+参数 & 符号 & 数值 \\
+\midrule
+Qubit 频率 & $\omega_q$ & 5.0 GHz \\
+非谐性 & $\alpha$ & 0.3 GHz \\
+T1 弛豫率 & $\gamma_1$ & 1 MHz \\
+纯退相率 & $\gamma_\phi$ & 0.5 MHz \\
+声子发射率 & $\kappa_{\text{ph}}$ & 20 MHz \\
+拉比频率 & $\Omega_0$ & 0.1 GHz \\
+脉冲宽度 & $\sigma$ & 20 ns \\
+脉冲类型 & --- & Gaussian / Sech \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{脉冲类型选择}
+
+代码中可通过 \texttt{pulse\_type} 参数切换脉冲形状：
+\begin{lstlisting}
+# 高斯脉冲
+result = simulate_phonon_emission(pulse_type='gaussian', ...)
+
+# Sech 脉冲
+result = simulate_phonon_emission(pulse_type='sech', ...)
+\end{lstlisting}
+
+%=============================================================================
+\section{物理图像总结}
+%=============================================================================
+
+\subsection{为什么不用 JC 模型？}
+
+\begin{table}[h]
+\centering
+\caption{JC 模型 vs Lindblad 描述}
+\begin{tabular}{p{4cm}p{5cm}p{5cm}}
+\toprule
+& JC 模型 & Lindblad 描述 \\
+\midrule
+适用系统 & 离散谐振腔模式 & 连续谱行波波导 \\
+声子算符 & 需要 $\hat{a}, \hat{a}^\dagger$ & 不需要 \\
+哈密顿量 & 包含 $\hat{a}^\dagger\hat{\sigma}_- + \text{h.c.}$ & 仅 qubit 算符 \\
+声子数 & 可计算腔内声子数 & 通过耗散流计算 \\
+可逆性 & 可逆（Rabi 振荡） & 不可逆（指数衰减） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{类比：原子自发辐射}
+
+\begin{itemize}
+    \item \textbf{腔 QED (JC)}：原子 + 光学谐振腔 $\leftrightarrow$ qubit + 声子谐振腔
+    \item \textbf{自由空间 (Lindblad)}：原子 + 真空涨落 $\leftrightarrow$ qubit + 行波声子波导
+\end{itemize}
+
+在自由空间中，原子激发态通过自发辐射衰减，我们用 Einstein A 系数描述，无需引入光子数算符。同理，qubit 向行波声子波导的发射用 $\kappa_{\text{ph}}$ 描述。
+
+%=============================================================================
+\section{结论}
+%=============================================================================
+
+本文档建立了 Transmon qubit 行波声子发射的完整理论框架，核心要点：
+
+\begin{enumerate}
+    \item \textbf{无 JC 模型}：避免引入声子谐振子算符
+    \item \textbf{Lindblad 描述}：在 Born-Markov 近似下，行波声子等效为耗散通道
+    \item \textbf{三种耗散区分}：清晰分离固有损耗、退相和有用声子发射
+    \item \textbf{高斯脉冲驱动}：实现可控时序的声子发射
+    \item \textbf{Time-bin 编码}：双脉冲时序分离，适用于量子通信
+\end{enumerate}
+
+该模型可直接用于 QuTiP 数值仿真，为超导量子声学接口的设计提供理论指导。
+
+%=============================================================================
+\begin{thebibliography}{99}
+\bibitem{qutip} J. Johansson et al., "QuTiP: An open-source Python framework for the dynamics of open quantum systems", \textit{Comp. Phys. Comm.} 183, 1760 (2012).
+\bibitem{transmon} J. Koch et al., "Charge-insensitive qubit design derived from the Cooper pair box", \textit{Phys. Rev. A} 76, 042319 (2007).
+\bibitem{phonon} A. D. O'Connell et al., "Quantum ground state and single-phonon control of a mechanical resonator", \textit{Nature} 464, 697 (2010).
+\bibitem{lindblad} G. Lindblad, "On the generators of quantum dynamical semigroups", \textit{Comm. Math. Phys.} 48, 119 (1976).
+\end{thebibliography}
+
+\end{document}
