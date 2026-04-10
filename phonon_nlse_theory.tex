@@ -1,0 +1,276 @@
+\documentclass[12pt,a4paper]{article}
+
+% 中文支持
+\usepackage{ctex}
+
+% 数学包
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{physics}
+\usepackage{booktabs}
+
+% 页面设置
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% 定理环境
+\theoremstyle{definition}
+\newtheorem{definition}{定义}[section]
+\newtheorem{theorem}{定理}[section]
+
+\title{\textbf{声子非线性传播理论}\\[0.5em]
+\large 基于非线性薛定谔方程的声子波包动力学}
+\author{基于分步傅里叶方法的数值仿真}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文档详细推导了GHz频段声子在一维波导中的非线性传播理论。考虑9GHz泵浦(15dBm,10\%IDT效率)产生5GHz信号声子,在群速度$v_g=3800$m/s、净增益6-7dB(300$\mu$m波导)条件下的传播特性。通过非线性薛定谔方程(NLSE)描述色散、非线性、增益与损耗的竞争,并使用分步傅里叶方法(SSFM)进行数值求解。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%=============================================================================
+\section{物理模型}
+%=============================================================================
+
+\subsection{系统配置}
+
+\begin{table}[h]
+\centering
+\caption{实验参数}
+\begin{tabular}{lll}
+\toprule
+参数 & 数值 & 说明 \\
+\midrule
+泵浦频率 & 9 GHz & 微波泵浦 \\
+泵浦功率 & 15 dBm & 约31.6 mW \\
+IDT效率 & 10\% & 电-声转换效率 \\
+信号声子频率 & 5 GHz & 待研究频段 \\
+群速度$v_g$ & 3800 m/s & 波导中的声速 \\
+波导长度$L$ & 300$\mu$m & 传播距离 \\
+净增益 & 6-7 dB & 增益略大于损耗 \\
+传播损耗$\alpha$ & 约4 dB/cm & 材料损耗 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{非线性薛定谔方程}
+
+在慢变包络近似(SVEA)下,声子波包$u(z,t)$的传播满足非线性薛定谔方程:
+
+\begin{equation}
+\boxed{i\frac{\partial u}{\partial z}=-\frac{\beta_2}{2}\frac{\partial^2 u}{\partial t^2}+\gamma|u|^2u+i\frac{\alpha-g}{2}u}
+\label{eq:NLSE}
+\end{equation}
+
+其中各项的物理意义:
+\begin{itemize}
+    \item $\beta_2$:群速度色散(GVD),单位s$^2$/m
+    \item $\gamma$:非线性系数,单位W$^{-1}$m$^{-1}$
+    \item $\alpha$:传播损耗,单位Np/m
+    \item $g$:增益系数,单位Np/m
+\end{itemize}
+
+%=============================================================================
+\section{方程推导}
+%=============================================================================
+
+\subsection{从波动方程到包络方程}
+
+\subsubsection{一维波动方程}
+
+考虑一维弹性波在介质中的传播:
+\begin{equation}
+\rho\frac{\partial^2\xi}{\partial t^2}=\frac{\partial\sigma}{\partial z}
+\label{eq:wave_eq}
+\end{equation}
+其中$\xi$为位移,$\sigma$为应力,$\rho$为密度。
+
+\subsubsection{非线性应力-应变关系}
+
+对于非线性介质,应力-应变关系包含高阶项:
+\begin{equation}
+\sigma=C_1\epsilon+C_2\epsilon^2+C_3\epsilon^3+\cdots
+\label{eq:nonlinear_stress}
+\end{equation}
+其中$\epsilon=\partial\xi/\partial z$为应变,$C_1$为线性弹性模量,$C_2,C_3$为非线性系数。
+
+\subsubsection{慢变包络近似}
+
+设声子场为载波与慢变包络的乘积:
+\begin{equation}
+\xi(z,t)=\frac{1}{2}\left[u(z,t)e^{i(k_0z-\omega_0t)}+\text{c.c.}\right]
+\label{eq:envelope_ansatz}
+\end{equation}
+
+将(\ref{eq:envelope_ansatz})代入(\ref{eq:wave_eq}),并利用(\ref{eq:nonlinear_stress}),在旋转波近似下得到包络方程。
+
+\subsection{色散关系}
+
+线性色散关系$\omega(k)$在载波频率附近展开:
+\begin{equation}
+\omega(k)=\omega_0+v_g(k-k_0)+\frac{1}{2}\frac{d^2\omega}{dk^2}(k-k_0)^2+\cdots
+\label{eq:dispersion_expansion}
+\end{equation}
+
+其中:
+\begin{itemize}
+    \item $v_g=d\omega/dk$:群速度
+    \item $\beta_2=d^2k/d\omega^2=-1/v_g^2\cdot dv_g/d\omega$:群速度色散
+\end{itemize}
+
+\subsection{非线性系数的来源}
+
+\subsubsection{三阶非线性(Kerr效应)}
+
+声子Kerr效应来自三阶非线性弹性:
+\begin{equation}
+\gamma=\frac{\omega_0^2C_3}{2\rho v_g^3A_{\text{eff}}}
+\label{eq:nonlinear_coefficient}
+\end{equation}
+其中$A_{\text{eff}}$为有效模式面积。
+
+%=============================================================================
+\section{孤子解}
+%=============================================================================
+
+\subsection{基态孤子}
+
+在无损、无色散情况下($\alpha=g=0,\beta_2<0$),NLSE有解析孤子解:
+\begin{equation}
+\boxed{u(z,t)=\sqrt{P_0}\text{sech}\left(\frac{t}{\tau_0}\right)e^{i\gamma P_0z/2}}
+\end{equation}
+其中:
+\begin{itemize}
+    \item $P_0$:峰值功率
+    \item $\tau_0$:脉冲宽度(特征时间)
+    \item 满足孤子条件:$N=1$,即$\gamma P_0\tau_0^2/|\beta_2|=1$
+\end{itemize}
+
+\subsection{孤子条件}
+
+基态孤子($N=1$)要求:
+\begin{equation}
+\boxed{\frac{\gamma P_0\tau_0^2}{|\beta_2|}=1}
+\label{eq:soliton_condition}
+\end{equation}
+或等价地:
+\begin{equation}
+P_0=\frac{|\beta_2|}{\gamma\tau_0^2}
+\end{equation}
+
+\subsection{有增益/损耗时的孤子}
+
+考虑增益($g>\alpha$),孤子振幅按指数增长:
+\begin{equation}
+u(z,t)=\sqrt{P_0}e^{g_{\text{eff}}z/2}\text{sech}\left(\frac{t}{\tau_0}\right)e^{i\phi(z)}
+\end{equation}
+其中$g_{\text{eff}}=g-\alpha$为净增益系数。
+
+%=============================================================================
+\section{分步傅里叶方法}
+%=============================================================================
+
+\subsection{算法原理}
+
+NLSE包含线性和非线性算符:
+\begin{equation}
+\frac{\partial u}{\partial z}=(\hat{L}+\hat{N})u
+\end{equation}
+其中:
+\begin{align}
+\hat{L}&=-\frac{i\beta_2}{2}\frac{\partial^2}{\partial t^2}-\frac{\alpha-g}{2}\\
+\hat{N}&=i\gamma|u|^2
+\end{align}
+
+在短距离$\Delta z$内,近似:
+\begin{equation}
+u(z+\Delta z,t)\approx e^{\Delta z\hat{L}}e^{\Delta z\hat{N}}u(z,t)
+\end{equation}
+
+\subsection{对称分步方法}
+
+为提高精度,使用对称分步:
+\begin{equation}
+u(z+\Delta z)=e^{\Delta z\hat{L}/2}e^{\Delta z\hat{N}}e^{\Delta z\hat{L}/2}u(z)
+\end{equation}
+
+\subsection{计算步骤}
+
+\begin{enumerate}
+    \item \textbf{非线性步(半步)}:时域计算$u_{1/2}=u(z,t)e^{(i\gamma|u|^2+g_{\text{eff}}/2)\Delta z/2}$
+    \item \textbf{色散步(全步)}:傅里叶域计算$\tilde{u}_{3/4}=\tilde{u}_{1/2}e^{-i\beta_2\omega^2\Delta z/2}$
+    \item \textbf{非线性步(半步)}:时域计算$u(z+\Delta z,t)=u_{3/4}e^{(i\gamma|u|^2+g_{\text{eff}}/2)\Delta z/2}$
+\end{enumerate}
+
+%=============================================================================
+\section{Python实现}
+%=============================================================================
+
+\subsection{核心代码}
+
+\begin{verbatim}
+def ssfm_propagate(u0, z, t, params):
+    u = np.zeros((len(z), len(t)), dtype=complex)
+    u[0, :] = u0
+    u_current = u0.copy()
+    
+    for n in range(1, len(z)):
+        # Step 1: Nonlinear (half step)
+        u_half = u_current * np.exp(
+            (params.g_eff/2 + 1j*params.GAMMA_NL*np.abs(u_current)**2) 
+            * dz/2)
+        
+        # Step 2: Dispersion (full step in frequency domain)
+        u_fft = np.fft.fft(u_half)
+        u_fft *= np.exp(-1j*params.BETA_2/2*omega**2*dz)
+        u_disp = np.fft.ifft(u_fft)
+        
+        # Step 3: Nonlinear (half step)
+        u_current = u_disp * np.exp(
+            (params.g_eff/2 + 1j*params.GAMMA_NL*np.abs(u_disp)**2) 
+            * dz/2)
+        u[n, :] = u_current
+    
+    return u
+\end{verbatim}
+
+%=============================================================================
+\section{仿真结果}
+%=============================================================================
+
+\subsection{参数设置}
+
+\begin{itemize}
+    \item 信号频率:5 GHz
+    \item 群速度:$v_g=3800$ m/s
+    \item 波导长度:$L=300\mu$m
+    \item 净增益:6.5 dB
+    \item GVD:$\beta_2=10^{-20}$ s$^2$/m
+    \item 非线性系数:$\gamma=10^{-3}$ W$^{-1}$m$^{-1}$
+\end{itemize}
+
+\subsection{基态孤子传播}
+
+当初始脉冲满足孤子条件时,脉冲在传播过程中保持形状不变(仅幅度受增益影响增长)。
+
+\subsection{高阶孤子}
+
+当$N>1$时,脉冲在传播过程中周期性变化(呼吸子)。
+
+%=============================================================================
+\section{结论}
+%=============================================================================
+
+本文档建立了GHz频段声子非线性传播的完整理论框架,主要结论:
+\begin{enumerate}
+    \item NLSE准确描述了色散、非线性、增益/损耗的竞争
+    \item 基态孤子在净增益介质中保持形状并指数增长
+    \item SSFM是求解NLSE的高效数值方法
+\end{enumerate}
+
+\end{document}
